@@ -2,8 +2,7 @@ import requests
 import json
 import gradio as gr
 from settings import settings
-from query_rewrite import QueryRewrite, query_rewrite_tmp
-from query_can_not_process_routing_discriminator import QueryCanNotProcessRoutingDiscriminator as Discriminator
+from query_rewrite import query_rewrite_tmp
 from query_routing_prompt import QUERY_ROUTING_CAN_NOT_PROCESS_TEMPLATE as query_routing_template
 from safety_check import prompt as safety_check_prompt
 from env import auth_key, chat_url
@@ -62,80 +61,63 @@ def rewrite_query(query, history, character):
     context = create_context(history, character)
     print(f"{context=}")
 
-    if DEV:
-        # 非服务器环境:
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {auth_key}"
-        }
-        data = {
-            "model": "gpt-4",
-            "stream": False,
-            "messages": [
-                    {
-                        "role": "user",
-                        "content": query_rewrite_tmp.format(context, query)
-                    }
-                ]
-        }
-        res = requests.post(chat_url, headers=headers, data=json.dumps(data))
-        try:
-            evaluation = res.json()["choices"][0]["message"]["content"]
-            return evaluation
-        except:
-            print(f"{res=}")
-            return gr.Warning("发生错误")
-            return "<发生错误>"
-    else:
-        # 服务器环境:
-        rewriter = QueryRewrite()
-        return rewriter.get_query_rewrite(context, query)
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {auth_key}"
+    }
+    data = {
+        "model": "gpt-4",
+        "stream": False,
+        "messages": [
+                {
+                    "role": "user",
+                    "content": query_rewrite_tmp.format(context, query)
+                }
+            ]
+    }
+    res = requests.post(chat_url, headers=headers, data=json.dumps(data))
+    try:
+        evaluation = res.json()["choices"][0]["message"]["content"]
+        return evaluation
+    except:
+        print(f"{res=}")
+        return gr.Warning("发生错误")
+        return "<发生错误>"
 
 def boundary_filter(query, history, character):
     context = create_context(history, character)
-    if DEV:
-        # 非服务器环境:
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {auth_key}"
-        }
-        data = {
-            "model": "gpt-4",
-            "stream": False,
-            "messages": [
-                    {
-                        "role": "user",
-                        "content": query_routing_template.format(chat_history=context, query=query)
-                    }
-                ]
-        }
-        res = requests.post(chat_url, headers=headers, data=json.dumps(data))
-        try:
-            evaluation = res.json()["choices"][0]["message"]["content"]
-        except:
-            print(f"{res=}")
-            gr.Warning("发生错误")
-            return None
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {auth_key}"
+    }
+    data = {
+        "model": "gpt-4",
+        "stream": False,
+        "messages": [
+                {
+                    "role": "user",
+                    "content": query_routing_template.format(chat_history=context, query=query)
+                }
+            ]
+    }
+    res = requests.post(chat_url, headers=headers, data=json.dumps(data))
+    try:
+        evaluation = res.json()["choices"][0]["message"]["content"]
+    except:
+        print(f"{res=}")
+        gr.Warning("发生错误")
+        return None
 
-        print(f'query routing evaluation: {evaluation}')
+    print(f'query routing evaluation: {evaluation}')
 
-        if evaluation not in ['是','否']:
-            evaluation = '是'
+    if evaluation not in ['是','否']:
+        evaluation = '是'
 
-        if evaluation == '是':
-            return query
-        else:
-            gr.Warning("不可执行")
-            return None
-
+    if evaluation == '是':
+        return query
     else:
-        discriminator = Discriminator()
-        res = discriminator.get_query_routing_for_demo(query, context)
-        if res:
-            return query
-        else:
-            gr.Warning("不可执行")
-            return None
+        gr.Warning("不可执行")
+        return None
 
 def check_for_safety(history):
     last_record = history[-1]
