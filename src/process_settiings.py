@@ -2,7 +2,7 @@ import pandas as pd
 import json
 
 
-settings = "npc_settings.csv"
+settings = "data/npc_settings.csv"
 df = pd.read_csv(settings, encoding="utf-8")
 
 npc_names = df["npc_name"][1:6].values
