@@ -1,6 +1,5 @@
 import gradio as gr
-from utils import request_api, rewrite_query, boundary_filter, check_for_safety
-
+from utils import chat_completion, rewrite_query, boundary_filter, check_for_safety
 
 with gr.Blocks() as demo:
     chatbot = gr.Chatbot(height=800)
@@ -15,7 +14,7 @@ with gr.Blocks() as demo:
         safety_check.click(check_for_safety, chatbot, None)
 
     gr.ChatInterface(
-            request_api,
+            chat_completion,
             chatbot=chatbot,
             textbox=textbox,
             theme="soft",

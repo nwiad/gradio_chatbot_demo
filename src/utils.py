@@ -5,9 +5,42 @@ from settings import settings
 from query_rewrite import query_rewrite_tmp
 from query_routing_prompt import QUERY_ROUTING_CAN_NOT_PROCESS_TEMPLATE as query_routing_template
 from safety_check import prompt as safety_check_prompt
-from env import auth_key, chat_url
+from env import auth_key, chat_url, azure_url, azure_api_key
 
-DEV = True
+QPILOT_AVAILABLE = False
+
+def request_api(messages):
+    if QPILOT_AVAILABLE:
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {auth_key}"
+        }
+        data = {
+            "model": "gpt-4",
+            "stream": False,
+            'messages': messages
+        }
+        res = requests.post(chat_url, headers=headers, data=json.dumps(data))
+        return res
+    else:
+        headers = {
+            'Content-Type': 'application/json', 
+            'api-key': azure_api_key
+        }
+        data = {
+            'max_tokens': 1024,
+            "temperature": 0.2,
+            "frequency_penalty": 0,
+            "presence_penalty": 0,
+            "top_p": 0.95,
+            'messages': messages
+        }
+        res = requests.post(
+            azure_url,
+            headers=headers,
+            data=json.dumps(data)
+        )
+        return res    
 
 def create_messages(system_prompt, input_content, history):
     res = [{"role": "system", "content": system_prompt}]
@@ -19,31 +52,17 @@ def create_messages(system_prompt, input_content, history):
     print(f"messages: {res}")
     return res
 
-def request_api(input_content, history, character):
+def chat_completion(input_content, history, character):
     print(f"{character=}")
     print(f"{history=}")
     system_prompt = f"你将扮演{character}，你要根据以下设定回复用户（PC）：{settings[character]}"
-    # 设置请求头部
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {auth_key}"
-    }
-    # 设置请求体
-    data = {
-        "model": "gpt-4",
-        "stream": False,
-        "messages": create_messages(system_prompt, input_content, history)
-    }
-
-    # 发送 POST 请求
-    res = requests.post(chat_url, headers=headers, data=json.dumps(data))
-    # 打印响应内容
+    res = request_api(create_messages(system_prompt, input_content, history))
     try:
         evaluation = res.json()["choices"][0]["message"]["content"]
         return evaluation
     except:
         print(f"{input_content=}")
-        print(f"{res=}")
+        print(f"res={res.json()}")
         gr.Warning("发生错误")
         return "<发生错误>"
 
@@ -60,51 +79,22 @@ def rewrite_query(query, history, character):
     # print(f"{character=}")
     context = create_context(history, character)
     print(f"{context=}")
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {auth_key}"
-    }
-    data = {
-        "model": "gpt-4",
-        "stream": False,
-        "messages": [
-                {
-                    "role": "user",
-                    "content": query_rewrite_tmp.format(context, query)
-                }
-            ]
-    }
-    res = requests.post(chat_url, headers=headers, data=json.dumps(data))
+    res = request_api([{"role": "user", "content": query_rewrite_tmp.format(context, query)}])
     try:
         evaluation = res.json()["choices"][0]["message"]["content"]
         return evaluation
     except:
-        print(f"{res=}")
-        return gr.Warning("发生错误")
-        return "<发生错误>"
+        print(f"res={res.json()}")
+        gr.Warning("发生错误")
+        return None
 
 def boundary_filter(query, history, character):
     context = create_context(history, character)
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {auth_key}"
-    }
-    data = {
-        "model": "gpt-4",
-        "stream": False,
-        "messages": [
-                {
-                    "role": "user",
-                    "content": query_routing_template.format(chat_history=context, query=query)
-                }
-            ]
-    }
-    res = requests.post(chat_url, headers=headers, data=json.dumps(data))
+    res = request_api([{"role": "user", "content": query_routing_template.format(chat_history=context, query=query)}])
     try:
         evaluation = res.json()["choices"][0]["message"]["content"]
     except:
-        print(f"{res=}")
+        print(f"res={res.json()}")
         gr.Warning("发生错误")
         return None
 
@@ -114,6 +104,7 @@ def boundary_filter(query, history, character):
         evaluation = '是'
 
     if evaluation == '是':
+        gr.Info("可执行")
         return query
     else:
         gr.Warning("不可执行")
@@ -123,24 +114,10 @@ def check_for_safety(history):
     last_record = history[-1]
     query = last_record[0]
     response = last_record[1]
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {auth_key}"
-    }
-    data = {
-        "model": "gpt-4",
-        "stream": False,
-        "messages": [
-                {
-                    "role": "user",
-                    "content": safety_check_prompt.format(query=query, response=response)
-                }
-            ]
-    }
-    res = requests.post(chat_url, headers=headers, data=json.dumps(data))
+    res = request_api([{"role": "user", "content": safety_check_prompt.format(query=query, response=response)}])
     try:
         evaluation = res.json()["choices"][0]["message"]["content"]
         gr.Info(f"回复评估：{evaluation}")
     except:
-        print(f"{res=}")
+        print(f"res={res.json()}")
         gr.Warning("发生错误")

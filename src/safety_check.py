@@ -1,13 +1,5 @@
 # coding: utf-8
-import sys
-import os
-import json
-import time
-
 import pandas as pd
-import requests
-from openai import OpenAI
-from tqdm import tqdm
 
 prompt = """
 请你按以下要求，评估模型的回复：
@@ -62,14 +54,14 @@ prompt = """
 """
 
 input_file = "data/moss_queries.csv"
-
-df = pd.read_csv(input_file, encoding='utf-8')
-queries = df["输入危险query"]
-responses_A = df["response生成A（pro0705）"]
-responses_B = df["response生成B（v0619）"]
-GSBs = df["GSB"]
-labels_A = df["评估标签（pro0705)"]
-labels_B = df["评估标签（pro0619)"]
+if __name__ == "__main__":
+    df = pd.read_csv(input_file, encoding='utf-8')
+    queries = df["输入危险query"]
+    responses_A = df["response生成A（pro0705）"]
+    responses_B = df["response生成B（v0619）"]
+    GSBs = df["GSB"]
+    labels_A = df["评估标签（pro0705)"]
+    labels_B = df["评估标签（pro0619)"]
 
 def generate_few_shots():
     few_shots = ""
